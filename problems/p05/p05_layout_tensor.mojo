@@ -23,9 +23,16 @@ fn broadcast_add[
     b: LayoutTensor[mut=False, dtype, b_layout],
     size: Int,
 ):
+<<<<<<< HEAD
     row = thread_idx.y
     col = thread_idx.x
     # FILL ME IN (roughly 2 lines)
+=======
+    local_i = thread_idx.x
+    local_j = thread_idx.y
+    if local_i < size and local_j < size:
+        out[local_i, local_j] = a[local_i, 0] + b[0, local_j]
+>>>>>>> 486345c (p01-p07 solutions)
 
 
 # ANCHOR_END: broadcast_add_layout_tensor

@@ -15,8 +15,14 @@ fn add_10_guard(
     a: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):
+<<<<<<< HEAD
     i = thread_idx.x
     # FILL ME IN (roughly 2 lines)
+=======
+    local_i = thread_idx.x
+    if local_i < size:
+        out[local_i] = a[local_i] + 10
+>>>>>>> 486345c (p01-p07 solutions)
 
 
 # ANCHOR_END: add_10_guard
