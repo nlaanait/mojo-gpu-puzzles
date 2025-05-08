@@ -6,8 +6,8 @@ from sys import sizeof
 from testing import assert_equal
 
 # ANCHOR: dot_product
-alias TPB = 8
 alias SIZE = 8
+alias TPB = 8
 alias BLOCKS_PER_GRID = (1, 1)
 alias THREADS_PER_BLOCK = (SIZE, 1)
 alias dtype = DType.float32
@@ -19,8 +19,29 @@ fn dot_product(
     b: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):
-    # FILL ME IN (roughly 13 lines)
-    ...
+    local_i = thread_idx.x
+    global_i = block_dim.x * block_idx.x + thread_idx.x
+
+    shared = stack_allocation[
+        TPB * sizeof[dtype](),
+        Scalar[dtype],
+        address_space = AddressSpace.SHARED,
+    ]()
+
+    if global_i < size:
+        shared[local_i] = a[global_i] * b[global_i]
+
+    barrier()
+
+    half_idx = size // 2  # assumes size is pow of 2
+    while half_idx > 0:
+        if local_i < half_idx:
+            shared[local_i] += shared[local_i + half_idx]
+        barrier()
+        half_idx //= 2
+
+    if local_i == 0:
+        out[0] = shared[local_i]
 
 
 # ANCHOR_END: dot_product
