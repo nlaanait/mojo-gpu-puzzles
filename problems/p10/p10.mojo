@@ -28,12 +28,12 @@ fn dot_product(
         address_space = AddressSpace.SHARED,
     ]()
 
-    if global_i < size:
-        shared[local_i] = a[global_i] * b[global_i]
+    if local_i < size:
+        shared[local_i] = a[local_i] * b[local_i]
 
     barrier()
 
-    half_idx = size // 2  # assumes size is pow of 2
+    half_idx = size // 2
     while half_idx > 0:
         if local_i < half_idx:
             shared[local_i] += shared[local_i + half_idx]
@@ -41,7 +41,7 @@ fn dot_product(
         half_idx //= 2
 
     if local_i == 0:
-        out[0] = shared[local_i]
+        out[0] = shared[0] if size % 2 == 0 else shared[0] + shared[size - 1]
 
 
 # ANCHOR_END: dot_product

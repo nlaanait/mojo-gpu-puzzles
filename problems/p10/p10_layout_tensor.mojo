@@ -41,7 +41,10 @@ fn dot_product[
         half_idx //= 2
 
     if local_i == 0:
-        out[0] = shared[local_i]
+        out[0] = (
+            shared[local_i] if size % 2
+            == 0 else shared[local_i] + shared[size - 1]
+        )
 
 
 # ANCHOR_END: dot_product_layout_tensor
