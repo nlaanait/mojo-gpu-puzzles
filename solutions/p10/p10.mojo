@@ -51,7 +51,7 @@ fn dot_product(
 
     # only thread 0 writes the final result
     if local_i == 0:
-        out[0] = shared[0]
+        out[0] = shared[0] if size % 2 == 0 else shared[0] + shared[size - 1]
 
 
 # ANCHOR_END: dot_product_solution
