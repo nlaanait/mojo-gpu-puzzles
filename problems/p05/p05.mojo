@@ -16,17 +16,10 @@ fn broadcast_add(
     b: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):
-<<<<<<< HEAD
-    row = thread_idx.y
-    col = thread_idx.x
-    # FILL ME IN (roughly 2 lines)
-
-=======
-    local_i = thread_idx.x
-    local_j = thread_idx.y
-    if local_i < size and local_j < size:
-        out[local_i * size + local_j] = a[local_i] + b[local_j]
->>>>>>> 486345c (p01-p07 solutions)
+    row = thread_idx.x
+    col = thread_idx.y
+    if row < size and col < size:
+        out[row * size + col] = a[row] + b[col]
 
 # ANCHOR_END: broadcast_add
 def main():

@@ -16,17 +16,10 @@ fn add_10_2d(
     a: LayoutTensor[mut=True, dtype, layout],
     size: Int,
 ):
-<<<<<<< HEAD
-    row = thread_idx.y
-    col = thread_idx.x
-    # FILL ME IN (roughly 2 lines)
-
-=======
-    local_i = thread_idx.x
-    local_j = thread_idx.y
-    if local_i < size and local_j < size:
-        out[local_i, local_j] = a[local_i, local_j] + 10
->>>>>>> 486345c (p01-p07 solutions)
+    row = thread_idx.x
+    col = thread_idx.y
+    if row < size and col < size:
+        out[row, col] = a[row, col] + 10
 
 # ANCHOR_END: add_10_2d_layout_tensor
 

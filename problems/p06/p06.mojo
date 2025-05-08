@@ -15,14 +15,9 @@ fn add_10_blocks(
     a: UnsafePointer[Scalar[dtype]],
     size: Int,
 ):
-<<<<<<< HEAD
     i = block_dim.x * block_idx.x + thread_idx.x
-    # FILL ME IN (roughly 2 lines)
-=======
-    global_i = block_dim.x * block_idx.x + thread_idx.x
-    if global_i < size:
-        out[global_i] = a[global_i] + 10
->>>>>>> 486345c (p01-p07 solutions)
+    if i < size:
+        out[i] = a[i] + 10
 
 
 # ANCHOR_END: add_10_blocks

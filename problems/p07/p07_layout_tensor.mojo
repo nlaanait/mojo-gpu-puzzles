@@ -20,16 +20,10 @@ fn add_10_blocks_2d[
     a: LayoutTensor[mut=False, dtype, a_layout],
     size: Int,
 ):
-<<<<<<< HEAD
-    row = block_dim.y * block_idx.y + thread_idx.y
-    col = block_dim.x * block_idx.x + thread_idx.x
-    # FILL ME IN (roughly 2 lines)
-=======
-    global_i = block_dim.x * block_idx.x + thread_idx.x
-    global_j = block_dim.y * block_idx.y + thread_idx.y
-    if global_i < size and global_j < size:
-        out[global_i, global_j] = a[global_i, 0] + 10
->>>>>>> 486345c (p01-p07 solutions)
+    row = block_dim.x * block_idx.x + thread_idx.x
+    col = block_dim.y * block_idx.y + thread_idx.y
+    if row < size and col < size:
+        out[row, col] = a[row, 0] + 10
 
 
 # ANCHOR_END: add_10_blocks_2d_layout_tensor
