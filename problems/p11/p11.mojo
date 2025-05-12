@@ -68,6 +68,24 @@ fn conv_1d_block_boundary[
     shared_b = tb[dtype]().row_major[CONV_2]().shared().alloc()
     if local_i < CONV_2:
         shared_b[local_i] = b[global_i]
+    if global_i < SIZE_2:
+        shared_a[local_i] = a[global_i]
+
+    if local_i < CONV_2 - 1:
+        next_idx = global_i + TPB
+        if next_idx < SIZE_2:
+            shared_a[TPB + local_i] = a[next_idx]
+            print("global_i = ", global_i, "a[next_idx]", a[next_idx])
+
+    if global_i < SIZE_2:
+        var temp_sum: out.element_type = 0.0
+
+        @parameter
+        for conv_idx in range(CONV_2):
+            if local_i + conv_idx < TPB + CONV_2 - 1:
+                temp_sum += shared_a[local_i + conv_idx] * shared_b[conv_idx]
+
+        out[global_i] = temp_sum
 
 
 # ANCHOR_END: conv_1d_block_boundary
