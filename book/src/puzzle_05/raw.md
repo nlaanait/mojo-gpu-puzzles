@@ -1,3 +1,9 @@
+## Overview
+
+Implement a kernel that broadcast adds vector `a` and vector `b` and stores it in 2D matrix `out`.
+
+**Note:** _You have more threads than positions._
+
 ## Key concepts
 
 In this puzzle, you'll learn about:

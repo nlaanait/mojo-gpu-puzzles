@@ -5,7 +5,6 @@ from layout.tensor_builder import LayoutTensorBuild as tb
 from sys import sizeof, argv
 from testing import assert_equal
 
-alias MAX_CONV = 4
 alias TPB = 8
 alias SIZE = 6
 alias CONV = 3
@@ -24,17 +23,15 @@ fn conv_1d_simple[
     out: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, in_layout],
-    a_size: Int,
-    b_size: Int,
 ):
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
     shared_a = tb[dtype]().row_major[SIZE]().shared().alloc()
     shared_b = tb[dtype]().row_major[CONV]().shared().alloc()
-    if global_i < a_size:
+    if global_i < SIZE:
         shared_a[local_i] = a[global_i]
 
-    if global_i < b_size:
+    if global_i < CONV:
         shared_b[local_i] = b[global_i]
 
     barrier()
@@ -45,11 +42,11 @@ fn conv_1d_simple[
     #     if local_i + j < SIZE:
     #         local_sum += shared_a[local_i + j] * shared_b[j]
 
-    # if global_i < a_size:
+    # if global_i < SIZE:
     #     out[global_i] = local_sum
 
     # Safe and correct:
-    if global_i < a_size:
+    if global_i < SIZE:
         # Note: using `var` allows us to include the type in the type inference
         # `out.element_type` is available in LayoutTensor
         var local_sum: out.element_type = 0
@@ -80,35 +77,33 @@ fn conv_1d_block_boundary[
     out: LayoutTensor[mut=False, dtype, out_layout],
     a: LayoutTensor[mut=False, dtype, in_layout],
     b: LayoutTensor[mut=False, dtype, in_layout],
-    a_size: Int,
-    b_size: Int,
 ):
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
     # first: need to account for padding
-    shared_a = tb[dtype]().row_major[TPB + CONV - 1]().shared().alloc()
-    shared_b = tb[dtype]().row_major[CONV]().shared().alloc()
-    if global_i < a_size:
+    shared_a = tb[dtype]().row_major[TPB + CONV_2 - 1]().shared().alloc()
+    shared_b = tb[dtype]().row_major[CONV_2]().shared().alloc()
+    if global_i < SIZE_2:
         shared_a[local_i] = a[global_i]
 
     # second: load elements needed for convolution at block boundary
-    if local_i < CONV - 1:
+    if local_i < CONV_2 - 1:
         # indices from next block
         next_idx = global_i + TPB
-        if next_idx < a_size:
+        if next_idx < SIZE_2:
             shared_a[TPB + local_i] = a[next_idx]
 
-    if local_i < b_size:
+    if local_i < CONV_2:
         shared_b[local_i] = b[local_i]
 
     barrier()
 
-    if global_i < a_size:
+    if global_i < SIZE_2:
         var local_sum: out.element_type = 0
 
         @parameter
-        for j in range(CONV):
-            if local_i + j < TPB + CONV - 1:
+        for j in range(CONV_2):
+            if local_i + j < TPB + CONV_2 - 1:
                 local_sum += shared_a[local_i + j] * shared_b[j]
 
         out[global_i] = local_sum
@@ -119,15 +114,17 @@ fn conv_1d_block_boundary[
 
 def main():
     with DeviceContext() as ctx:
-        out = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
-        a = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
-        b = ctx.enqueue_create_buffer[dtype](CONV).enqueue_fill(0)
+        size = SIZE_2 if argv()[1] == "--block-boundary" else SIZE
+        conv = CONV_2 if argv()[1] == "--block-boundary" else CONV
+        out = ctx.enqueue_create_buffer[dtype](size).enqueue_fill(0)
+        a = ctx.enqueue_create_buffer[dtype](size).enqueue_fill(0)
+        b = ctx.enqueue_create_buffer[dtype](conv).enqueue_fill(0)
         with a.map_to_host() as a_host:
-            for i in range(SIZE):
+            for i in range(size):
                 a_host[i] = i
 
         with b.map_to_host() as b_host:
-            for i in range(CONV):
+            for i in range(conv):
                 b_host[i] = i
 
         out_tensor = LayoutTensor[mut=False, dtype, out_layout](
@@ -143,8 +140,8 @@ def main():
                 out_tensor,
                 a_tensor,
                 b_tensor,
-                SIZE,
-                CONV,
+                size,
+                conv,
                 grid_dim=BLOCKS_PER_GRID,
                 block_dim=THREADS_PER_BLOCK,
             )
@@ -157,27 +154,27 @@ def main():
                 out_tensor,
                 a_tensor,
                 b_tensor,
-                SIZE,
-                CONV,
+                size,
+                conv,
                 grid_dim=BLOCKS_PER_GRID_2,
                 block_dim=THREADS_PER_BLOCK_2,
             )
         else:
             raise Error("Invalid argument")
 
-        expected = ctx.enqueue_create_host_buffer[dtype](SIZE).enqueue_fill(0)
+        expected = ctx.enqueue_create_host_buffer[dtype](size).enqueue_fill(0)
         ctx.synchronize()
 
         with a.map_to_host() as a_host, b.map_to_host() as b_host:
-            for i in range(SIZE):
-                for j in range(CONV):
-                    if i + j < SIZE:
+            for i in range(size):
+                for j in range(conv):
+                    if i + j < size:
                         expected[i] += a_host[i + j] * b_host[j]
 
         with out.map_to_host() as out_host:
             print("out:", out_host)
             print("expected:", expected)
-            for i in range(SIZE):
-                for j in range(CONV):
-                    if i + j < SIZE:
-                        assert_equal(out_host[i + j], expected[i + j])
+            for i in range(size):
+                for j in range(conv):
+                    if i + j < size:
+                        assert_equal(out_host[i], expected[i])

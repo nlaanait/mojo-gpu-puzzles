@@ -64,6 +64,8 @@ viz13 = "cd book/src/puzzle_13 && python puzzle_13_viz.py"
 p14 = "mojo problems/p14/p14.mojo"
 viz14 = "cd book/src/puzzle_14 && python puzzle_14_viz.py"
 
+p15 = "cd problems/p15 && mojo package op -o op.mojopkg && python p15.py"
+
 [dependencies]
 max = "*"
 bash = ">=5.2.21,<6"

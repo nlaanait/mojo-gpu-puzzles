@@ -1,3 +1,9 @@
+## Overview
+
+Implement a kernel that compute the running sum of the last 3 positions of vector `a` and stores it in vector `out`.
+
+**Note:** _You have 1 thread per position. You only need 1 global read and 1 global write per thread._
+
 ## Key concepts
 
 In this puzzle, you'll learn about:

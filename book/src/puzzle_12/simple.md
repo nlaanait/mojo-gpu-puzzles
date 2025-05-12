@@ -1,5 +1,9 @@
 # Simple Version
 
+Implement a kernel that computes a prefix-sum over 1D LayoutTensor `a` and stores it in 1D LayoutTensor `out`.
+
+**Note:** _If the size of `a` is greater than the block size, only store the sum of each block._
+
 ## Configuration
 - Array size: `SIZE = 8` elements
 - Threads per block: `TPB = 8`

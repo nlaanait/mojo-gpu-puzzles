@@ -19,6 +19,7 @@
 
 
 ## Overview
+
 In signal processing and image analysis, convolution is a fundamental operation that combines two sequences to produce a third sequence. This puzzle challenges you to implement a 1D convolution on the GPU, where each output element is computed by sliding a kernel over an input array.
 
 
@@ -43,10 +44,10 @@ for i in range(SIZE):
 
 This puzzle is split into two parts to help you build understanding progressively:
 
-- [Simple version: Single block](./simple.md)
+- [Simple Version with Single Block](./simple.md)
   Start here to learn the basics of implementing convolution with shared memory in a single block using LayoutTensor.
 
-- [Complete version: Block boundary](./complete.md)
+- [Block Boundary Version](./complete.md)
   Then tackle the more challenging case where data needs to be shared across block boundaries, leveraging LayoutTensor's capabilities.
 
 Each version presents unique challenges in terms of memory access patterns and thread coordination. The simple version helps you understand the basic convolution operation, while the complete version tests your ability to handle more complex scenarios that arise in real-world GPU programming.

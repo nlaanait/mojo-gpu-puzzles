@@ -122,7 +122,7 @@ expected: HostBuffer([2240.0, 2296.0, 2352.0, 2408.0, 2464.0, 2520.0, 2576.0, 26
 
 <div class="solution-explanation">
 
-The tiled matrix multiplication implementation demonstrates efficient handling of large matrices \((8 \times 8)\) using small tiles \((3 \times 3)\). Here's how it works:
+The tiled matrix multiplication implementation demonstrates efficient handling of large matrices \\((8 \times 8)\\) using small tiles \\((3 \times 3)\\). Here's how it works:
 
 1. **Thread indexing setup**
    - Global position calculation:

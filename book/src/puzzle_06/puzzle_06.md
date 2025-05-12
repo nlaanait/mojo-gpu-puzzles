@@ -1,6 +1,7 @@
 # Puzzle 6: Blocks
 
 ## Overview
+
 Implement a kernel that adds 10 to each position of vector `a` and stores it in `out`.
 
 **Note:** _You have fewer threads per block than the size of a._

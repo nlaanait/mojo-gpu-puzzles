@@ -1,7 +1,8 @@
 # LayoutTensor Version
 
 ## Overview
-Implement a kernel that broadcast adds _LayoutTensor_ vector `a` and _LayoutTensor_ vector `b` and stores it in _LayoutTensor_ `out`.
+
+Implement a kernel that broadcast adds 1D LayoutTensor `a` and 1D LayoutTensor `b` and stores it in 2D LayoutTensor `out`.
 
 **Note:** _You have more threads than positions._
 

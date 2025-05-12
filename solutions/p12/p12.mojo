@@ -48,126 +48,156 @@ fn prefix_sum_simple[
 alias SIZE_2 = 15
 alias BLOCKS_PER_GRID_2 = (2, 1)
 alias THREADS_PER_BLOCK_2 = (TPB, 1)
-
+alias EXTENDED_SIZE = SIZE_2 + 2  # up to 2 blocks
+alias extended_layout = Layout.row_major(EXTENDED_SIZE)
 
 # ANCHOR: prefix_sum_complete_solution
-fn prefix_sum[
-    layout: Layout
-](
-    out: LayoutTensor[mut=False, dtype, layout],
-    a: LayoutTensor[mut=False, dtype, layout],
+
+# Kernel 1: Compute local prefix sums and store block sums in out
+fn prefix_sum_local_phase[out_layout: Layout, in_layout: Layout](
+    out: LayoutTensor[mut=False, dtype, out_layout],
+    a: LayoutTensor[mut=False, dtype, in_layout],
     size: Int,
+    num_blocks: Int
 ):
     global_i = block_dim.x * block_idx.x + thread_idx.x
     local_i = thread_idx.x
     shared = tb[dtype]().row_major[TPB]().shared().alloc()
+
+    # Load data into shared memory
+    # Example with SIZE_2=15, TPB=8, BLOCKS=2:
+    # Block 0 shared mem: [0,1,2,3,4,5,6,7]
+    # Block 1 shared mem: [8,9,10,11,12,13,14,0]  (last value padded with 0)
     if global_i < size:
         shared[local_i] = a[global_i]
 
     barrier()
 
-    # Idea: two passes
-    # SIZE=15, TPB=8, BLOCKS=2
-    # buffer: [0,1,2,...,7 | 8,...,14]
-
-    # Step 1: Each block computes local prefix sum
-    # Block 0: [0,1,2,3,4,5,6,7] → [0,1,3,6,10,15,21,28]
-    # Block 1: [8,9,10,11,12,13,14] → [8,17,27,38,50,63,77]
-
-    # Step 2: Store block sums
-    # Block 0's sum (28) → position 8
-
-    # Step 3: Add previous block's sum
-    # Block 1: Each element += 28
-    # [8,17,27,38,50,63,77] → [36,45,55,66,78,91,105]
-
-    # Final result combines both blocks:
-    # [0,1,3,6,10,15,21,28, 36,45,55,66,78,91,105]
-
-    # local prefix-sum for each block
+    # Compute local prefix sum using parallel reduction
+    # This uses a tree-based algorithm with log(TPB) iterations
+    # Iteration 1 (offset=1):
+    #   Block 0: [0,0+1,2+1,3+2,4+3,5+4,6+5,7+6] = [0,1,3,5,7,9,11,13]
+    # Iteration 2 (offset=2):
+    #   Block 0: [0,1,3+0,5+1,7+3,9+5,11+7,13+9] = [0,1,3,6,10,14,18,22]
+    # Iteration 3 (offset=4):
+    #   Block 0: [0,1,3,6,10+0,14+1,18+3,22+6] = [0,1,3,6,10,15,21,28]
+    # Block 1 follows same pattern to get [8,17,27,38,50,63,77,...]
     offset = 1
     for i in range(Int(log2(Scalar[dtype](TPB)))):
-        if local_i >= offset and local_i < size:
+        if local_i >= offset and local_i < TPB:
             shared[local_i] += shared[local_i - offset]
-
         barrier()
         offset *= 2
 
-    # store block results
+    # Write local results to output
+    # Block 0 writes: [0,1,3,6,10,15,21,28]
+    # Block 1 writes: [8,17,27,38,50,63,77,...]
     if global_i < size:
         out[global_i] = shared[local_i]
 
-    # store block sum in first element of next block:
-    # - Only last thread (local_i == 7) in each block except last block executes
-    # - Block 0: Thread 7 stores 28 (sum of 0-7) at position 8 (start of Block 1)
-    # - Calculation: TPB * (block_idx.x + 1)
-    # Block 0: 8 * (0 + 1) = position 8
-    # Block 1: No action (last block)
-    # Memory state:
-    # [0,1,3,6,10,15,21,28 | 28,45,55,66,78,91,105]
-    #                        ↑
-    #                       Block 0's sum stored here
-    if local_i == TPB - 1 and block_idx.x < size // TPB - 1:
-        out[TPB * (block_idx.x + 1)] = shared[local_i]
+    # Store block sums in auxiliary space
+    # Block 0: Thread 7 stores 28 at position size+0 (position 15)
+    # Block 1: Thread 7 stores 77 at position size+1 (position 16)
+    # This gives us: [0,1,3,6,10,15,21,28, 8,17,27,38,50,63,77, 28,77]
+    #                                                           ↑  ↑
+    #                                                     Block sums here
+    if local_i == TPB - 1:
+        out[size + block_idx.x] = shared[local_i]
 
-    # wait for all blocks to store their sums
-    barrier()
+# Kernel 2: Add block sums to their respective blocks
+fn prefix_sum_block_sum_phase[layout: Layout](
+    out: LayoutTensor[mut=False, dtype, layout],
+    size: Int
+):
+    global_i = block_dim.x * block_idx.x + thread_idx.x
 
-    # second pass: add previous block's sum which becomes:
-    # Before: [8,9,10,11,12,13,14]
-    # Add 28: [36,37,38,39,40,41,42]
+    # Second pass: add previous block's sum to each element
+    # Block 0: No change needed - already correct
+    # Block 1: Add Block 0's sum (28) to each element
+    #   Before: [8,17,27,38,50,63,77]
+    #   After: [36,45,55,66,78,91,105]
+    # Final result combines both blocks:
+    # [0,1,3,6,10,15,21,28, 36,45,55,66,78,91,105]
     if block_idx.x > 0 and global_i < size:
-        shared[local_i] += out[block_idx.x * TPB - 1]
-
-    # final result
-    if global_i < size:
-        out[global_i] = shared[local_i]
-
+        prev_block_sum = out[size + block_idx.x - 1]
+        out[global_i] += prev_block_sum
 
 # ANCHOR_END: prefix_sum_complete_solution
 
 
 def main():
     with DeviceContext() as ctx:
-        out = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
-        a = ctx.enqueue_create_buffer[dtype](SIZE).enqueue_fill(0)
+        use_simple = argv()[1] == "--simple"
+        size = SIZE if use_simple else SIZE_2
+        num_blocks = (size + TPB - 1) // TPB
+
+        if not use_simple and num_blocks > EXTENDED_SIZE - SIZE_2:
+            raise Error("Extended buffer too small for the number of blocks")
+
+        buffer_size = size if use_simple else EXTENDED_SIZE
+        out = ctx.enqueue_create_buffer[dtype](buffer_size).enqueue_fill(0)
+        a = ctx.enqueue_create_buffer[dtype](size).enqueue_fill(0)
+
         with a.map_to_host() as a_host:
-            for i in range(SIZE):
+            for i in range(size):
                 a_host[i] = i
 
-        out_tensor = LayoutTensor[mut=False, dtype, layout](out.unsafe_ptr())
         a_tensor = LayoutTensor[mut=False, dtype, layout](a.unsafe_ptr())
 
-        if argv()[1] == "--simple":
+        if use_simple:
+            out_tensor = LayoutTensor[mut=False, dtype, layout](out.unsafe_ptr())
+
             ctx.enqueue_function[prefix_sum_simple[layout]](
                 out_tensor,
                 a_tensor,
-                SIZE,
+                size,
                 grid_dim=BLOCKS_PER_GRID,
                 block_dim=THREADS_PER_BLOCK,
             )
-        elif argv()[1] == "--complete":
-            ctx.enqueue_function[prefix_sum[layout]](
+        else:
+            var out_tensor = LayoutTensor[mut=False, dtype, extended_layout](out.unsafe_ptr())
+
+            # ANCHOR: prefix_sum_complete_block_level_sync
+            # Phase 1: Local prefix sums
+            ctx.enqueue_function[prefix_sum_local_phase[extended_layout, extended_layout]](
                 out_tensor,
                 a_tensor,
-                SIZE,
+                size,
+                num_blocks,
                 grid_dim=BLOCKS_PER_GRID_2,
                 block_dim=THREADS_PER_BLOCK_2,
             )
-        else:
-            raise Error("Invalid argument")
 
-        expected = ctx.enqueue_create_host_buffer[dtype](SIZE).enqueue_fill(0)
+            # Wait for all `blocks` to complete with using host `ctx.synchronize()`
+            # Note this is in contrast with using `barrier()` in the kernel
+            # which is a synchronization point for all threads in the same block and not across blocks.
+            ctx.synchronize()
 
+            # Phase 2: Add block sums
+            ctx.enqueue_function[prefix_sum_block_sum_phase[extended_layout]](
+                out_tensor,
+                size,
+                grid_dim=BLOCKS_PER_GRID_2,
+                block_dim=THREADS_PER_BLOCK_2,
+            )
+            # ANCHOR_END: prefix_sum_complete_block_level_sync
+
+        # Verify results for both cases
+        expected = ctx.enqueue_create_host_buffer[dtype](size).enqueue_fill(0)
         ctx.synchronize()
 
         with a.map_to_host() as a_host:
             expected[0] = a_host[0]
-            for i in range(1, SIZE):
+            for i in range(1, size):
                 expected[i] = expected[i - 1] + a_host[i]
 
         with out.map_to_host() as out_host:
-            print("out:", out)
+            if not use_simple:
+                print("Note: we print the extended buffer here, but we only need to print the first `size` elements")
+
+            print("out:", out_host)
             print("expected:", expected)
-            for i in range(SIZE):
+            # Here we need to use the size of the original array, not the extended one
+            size = size if use_simple else SIZE_2
+            for i in range(size):
                 assert_equal(out_host[i], expected[i])
